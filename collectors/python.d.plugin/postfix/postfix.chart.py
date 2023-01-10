@@ -10,6 +10,7 @@ POSTQUEUE_COMMAND = 'postqueue -p'
 ORDER = [
     'qemails',
     'qsize',
+    'qdelay',
 ]
 
 CHARTS = {
@@ -23,6 +24,12 @@ CHARTS = {
         'options': [None, 'Postfix Queue Emails Size', 'KiB', 'queue', 'postfix.qsize', 'area'],
         'lines': [
             ['size', None, 'absolute']
+        ]
+    },
+    'qdelay': {
+        'options': [None, 'Postfix Queue Emails Avg Delay', 'seconds', 'queue', 'postfix.qsize', 'area'],
+        'lines': [
+            ['seconds', None, 'increment']
         ]
     }
 }
@@ -41,12 +48,42 @@ class Service(ExecutableService):
         :return: dict
         """
         try:
-            raw = self._get_raw_data()[-1].split(' ')
-            if raw[0] == 'Mail' and raw[1] == 'queue':
-                return {'emails': 0,
-                        'size': 0}
+            return {
+                    'emails': 10,
+                    'size': 10,
+                    'seconds': 10
+                }
+            raw = self._get_raw_data()
+            if not raw:
+                return {
+                    'emails': 0,
+                    'size': 0,
+                    'seconds': 0
+                }
+            raws = raw[-1].split(' ')
+            lines = 0
+            data = {'seconds': 0}
+            for line in raw:
+                match = self.re.search(line)
 
-            return {'emails': raw[4],
-                    'size': raw[1]}
+                if match:
+                    lines += 1
+                    delay = match.group(1)
+                    data['seconds'] += float(delay)
+
+            if lines > 0:
+                data['seconds'] = data['seconds'] / lines
+            if raws[0] == 'Mail' and raws[1] == 'queue':
+                return {
+                    'emails': 0,
+                    'size': 0,
+                    'seconds': 0
+                }
+
+            return {
+                'emails': raws[4] if raws else 0,
+                'size': raws[1] if raws else 0,
+                'seconds': data.get("seconds", 0)
+            }
         except (ValueError, AttributeError):
             return None
